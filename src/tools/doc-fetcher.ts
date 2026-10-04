@@ -102,7 +102,7 @@ function formatSpecificAPIContent(jsonData: AppleDocJSON): string {
             const declaration = typedSection.declarations[0].tokens
               .map((token) => token.text ?? '')
               .join('');
-            content += `\`\`\`swift\n${declaration}\n\`\`\`\n\n`;
+            content += `\`\`\`swift\n${declaration.trimEnd()}\n\`\`\`\n\n`;
           }
           break;
 

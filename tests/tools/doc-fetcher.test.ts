@@ -158,7 +158,7 @@ describe('fetchAppleDocJson', () => {
       // The shape of UNCalendarNotificationTrigger's page: its only code listing sits in Swift and Objective-C tabs.
       const doc = {
         primaryContentSections: [
-          { kind: 'declarations', declarations: [{ tokens: [{ text: 'class UNCalendarNotificationTrigger' }] }] },
+          { kind: 'declarations', declarations: [{ tokens: [{ text: 'class UNCalendarNotificationTrigger' }, { text: '\n' }] }] },
           {
             kind: 'content',
             content: [
