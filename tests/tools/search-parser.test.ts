@@ -54,13 +54,29 @@ describe('parseSearchResults', () => {
       expect(output).toContain('**URL:** https://developer.apple.com/documentation/uikit/uiview');
     });
 
-    it('should keep only documentation pages', () => {
+    it('should keep documentation pages and design guidelines', () => {
       const output = text(stream([
         result('WWDC Video', '/videos/play/wwdc2023/10001'),
-        result('Buttons', '/design/human-interface-guidelines/buttons', { kind: 'article' }),
+        result('Buttons', '/design/human-interface-guidelines/buttons', {
+          kind: 'article',
+          hierarchy: 'Human Interface Guidelines > Components > Menus and actions > Buttons',
+        }),
       ]));
 
-      expect(output).toContain('No results found');
+      expect(output).not.toContain('WWDC Video');
+      expect(output).toContain('## 🎨 Design Guidelines');
+      expect(output).toContain('**URL:** https://developer.apple.com/design/human-interface-guidelines/buttons');
+    });
+
+    it('should keep only design guidelines under the design filter', () => {
+      const jsonl = stream([
+        result('UIButton', '/documentation/uikit/uibutton'),
+        result('Buttons', '/design/human-interface-guidelines/buttons', { kind: 'article' }),
+      ]);
+
+      expect(text(jsonl, 'buttons', 'design')).not.toContain('uikit/uibutton');
+      expect(text(jsonl, 'buttons', 'design')).toContain('human-interface-guidelines/buttons');
+      expect(text(jsonl, 'buttons', 'documentation')).not.toContain('human-interface-guidelines/buttons');
     });
 
     it('should handle empty results', () => {
