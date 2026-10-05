@@ -16,21 +16,33 @@ export interface ContentSection {
   }>;
 }
 
+/**
+ * A run of inline content: text, code voice, a reference, a link, or emphasis around more inline content
+ */
+export interface InlineItem {
+  type: string;
+  text?: string;
+  code?: string;
+  identifier?: string;
+  overridingTitle?: string;
+  title?: string;
+  inlineContent?: InlineItem[];
+}
+
 export interface ContentItem {
   type: string;
   text?: string;
-  inlineContent?: Array<{
-    type: string;
-    text?: string;
-    code?: string;
-    identifier?: string;
-  }>;
+  level?: number;
+  inlineContent?: InlineItem[];
   items?: unknown[];
   code?: string[];
   syntax?: string;
   name?: string;
   content?: ContentItem[];
   tabs?: Array<{ title?: string; content?: ContentItem[] }>;
+  columns?: Array<{ content?: ContentItem[] }>;
+  header?: string;
+  rows?: ContentItem[][][];
 }
 
 export interface ListItem {
