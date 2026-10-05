@@ -32,6 +32,11 @@ export function convertToJsonApiUrl(webUrl: string): string | null {
       return `https://developer.apple.com/tutorials/data/documentation/${path}.json`;
     }
 
+    // The design guidelines are served from the same data path as the documentation
+    if (path.startsWith('/design/human-interface-guidelines/')) {
+      return `https://developer.apple.com/tutorials/data${path}.json`;
+    }
+
     // For tutorial URLs, try to format for the JSON API
     if (path.includes('/tutorials/')) {
       // Try to convert tutorials URL to JSON API format

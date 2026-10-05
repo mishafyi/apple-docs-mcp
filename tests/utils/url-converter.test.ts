@@ -27,6 +27,13 @@ describe('URL Converter', () => {
       expect(convertToJsonApiUrl(webUrl)).toBe(expected);
     });
 
+    it('should convert a design guidelines URL to JSON API URL', () => {
+      const webUrl = 'https://developer.apple.com/design/human-interface-guidelines/tab-bars';
+      const expected = 'https://developer.apple.com/tutorials/data/design/human-interface-guidelines/tab-bars.json';
+
+      expect(convertToJsonApiUrl(webUrl)).toBe(expected);
+    });
+
     it('should return original URL if not recognized format', () => {
       const webUrl = 'https://developer.apple.com/news/some-article';
       

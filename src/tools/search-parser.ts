@@ -93,6 +93,7 @@ function getDisplayType(type: string): string {
     'documentation-article': '📄 Articles',
     'documentation-tutorial': '📖 Tutorials',
     'sample-code': '💻 Sample Code',
+    'design-guideline': '🎨 Design Guidelines',
     'guide': '📋 Guides',
   };
 

@@ -11,7 +11,7 @@ import { searchFrameworkSymbolsTool } from './search-framework-symbols.js';
 export const toolDefinitions: Tool[] = [
   {
     name: 'search_apple_docs',
-    description: 'Search Apple Developer Documentation for APIs, frameworks, guides, and samples. Best for finding specific APIs, classes, or methods. For browsing sample code projects, use get_sample_code. For WWDC videos, use the dedicated WWDC tools (list_wwdc_videos, search_wwdc_content).',
+    description: 'Search Apple Developer Documentation and the Human Interface Guidelines for APIs, frameworks, guides, design guidance, and samples. Best for finding specific APIs, classes, or methods. For browsing sample code projects, use get_sample_code. For WWDC videos, use the dedicated WWDC tools (list_wwdc_videos, search_wwdc_content).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -21,8 +21,8 @@ export const toolDefinitions: Tool[] = [
         },
         type: {
           type: 'string',
-          enum: ['all', 'documentation', 'sample'],
-          description: 'Type of content to filter. Use "all" for comprehensive results, "documentation" for API references/guides, "sample" for code snippets. Note: "sample" returns individual code examples, not full projects. For complete sample projects, use get_sample_code instead. Default: "all".',
+          enum: ['all', 'documentation', 'design', 'sample'],
+          description: 'Type of content to filter. Use "all" for comprehensive results, "documentation" for API references/guides, "design" for the Human Interface Guidelines, "sample" for code snippets. Note: "sample" returns individual code examples, not full projects. For complete sample projects, use get_sample_code instead. Default: "all".',
         },
       },
       required: ['query'],
@@ -40,7 +40,7 @@ export const toolDefinitions: Tool[] = [
       properties: {
         url: {
           type: 'string',
-          description: 'Full URL of the Apple Developer Documentation page. Must start with https://developer.apple.com/documentation/. Example: "https://developer.apple.com/documentation/uikit/uiviewcontroller"',
+          description: 'Full URL of the Apple Developer Documentation page. Must start with https://developer.apple.com/documentation/ or https://developer.apple.com/design/human-interface-guidelines/. Example: "https://developer.apple.com/documentation/uikit/uiviewcontroller"',
         },
         includeRelatedApis: {
           type: 'boolean',

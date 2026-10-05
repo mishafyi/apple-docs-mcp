@@ -278,7 +278,7 @@ export const TOOL_ERROR_SUGGESTIONS: Record<string, Record<string, string[]>> = 
 
   get_apple_doc_content: {
     [ErrorType.NOT_FOUND]: [
-      'Verify the URL starts with https://developer.apple.com/documentation/',
+      'Verify the URL starts with https://developer.apple.com/documentation/ or https://developer.apple.com/design/human-interface-guidelines/',
       'Use search_apple_docs first to find valid URLs',
       'Check if the API might have been renamed or moved',
     ],

@@ -25,6 +25,25 @@ import { warmUpCaches, schedulePeriodicCacheRefresh } from './utils/cache-warmer
 import { logger } from './utils/logger.js';
 import { API_LIMITS } from './utils/constants.js';
 
+const developerPath = (pathPrefix: string) => ({
+  kind: 'and',
+  scopes: [{ kind: 'hostname', value: 'developer.apple.com' }, { kind: 'pathPrefix', value: pathPrefix }],
+});
+
+/**
+ * Search scopes by `type`, built the way Apple's search page builds its filters
+ * (developer.apple.com/search/scripts/search.js); `all` joins the documentation and the design guidelines
+ */
+const SEARCH_SCOPES: Record<string, object> = {
+  documentation: developerPath('/documentation/'),
+  design: developerPath('/design/human-interface-guidelines/'),
+  sample: { kind: 'documentationRole', value: 'sampleCode' },
+  all: {
+    kind: 'or',
+    scopes: [developerPath('/documentation/'), developerPath('/design/human-interface-guidelines/')],
+  },
+};
+
 export default class AppleDeveloperDocsMCPServer {
   private server: Server;
 
@@ -121,21 +140,12 @@ export default class AppleDeveloperDocsMCPServer {
       logger.info(`Searching Apple docs for: ${query}`);
 
       // The search page fills itself in the browser from this API, so its HTML holds no results
-      // (https://github.com/kimsungwhee/apple-docs-mcp/issues/51). The scopes are the ones the page
-      // sends for its Sample Code and Documentation filters.
+      // (https://github.com/kimsungwhee/apple-docs-mcp/issues/51).
       const jsonl = await httpClient.postText(APPLE_URLS.SEARCH_API, {
         text: query,
         targetResultLocale: 'en',
         includedResponses: ['search'],
-        searchScope: type === 'sample'
-          ? { kind: 'documentationRole', value: 'sampleCode' }
-          : {
-            kind: 'and',
-            scopes: [
-              { kind: 'hostname', value: 'developer.apple.com' },
-              { kind: 'pathPrefix', value: '/documentation/' },
-            ],
-          },
+        searchScope: SEARCH_SCOPES[type] ?? SEARCH_SCOPES.all,
       }, 'application/jsonl');
 
       // 解析并返回搜索结果，传递type参数进行过滤

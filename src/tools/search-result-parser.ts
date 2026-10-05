@@ -16,10 +16,16 @@ export interface SearchResult {
  * Type mapping for search filters
  */
 export const typeMapping: Record<string, string[]> = {
-  all: ['documentation', 'documentation-article', 'documentation-tutorial', 'sample-code'],
+  all: ['documentation', 'documentation-article', 'documentation-tutorial', 'sample-code', 'design-guideline'],
   documentation: ['documentation', 'documentation-article'],
+  design: ['design-guideline'],
   sample: ['sample-code'],
 };
+
+/**
+ * Where the Human Interface Guidelines live on developer.apple.com
+ */
+export const DESIGN_GUIDELINES_PATH = '/design/human-interface-guidelines/';
 
 /**
  * Unsupported document types
@@ -52,18 +58,13 @@ export function isUrlSupported(url: string): boolean {
     return false;
   }
 
-  // Skip non-documentation URLs
-  if (!url.includes('/documentation/')) {
+  // Skip everything but the documentation and the design guidelines
+  if (!url.includes('/documentation/') && !url.includes(DESIGN_GUIDELINES_PATH)) {
     return false;
   }
 
   // Skip download links and zip files
   if (url.includes('download.apple.com') || url.includes('.zip')) {
-    return false;
-  }
-
-  // Skip human interface guidelines
-  if (url.includes('/design/human-interface-guidelines/')) {
     return false;
   }
 
@@ -99,7 +100,8 @@ const KIND_TYPES: Record<string, string> = {
  */
 export function parseSearchResult(result: ApiSearchResult, filterType: string): SearchResult | null {
   const { title, permalink, kind, description, hierarchy } = result.value?.metadata ?? {};
-  const type = KIND_TYPES[kind ?? ''] ?? 'documentation';
+  // A guideline page reports itself as an article, so its place on the site is what tells it apart
+  const type = permalink?.includes(DESIGN_GUIDELINES_PATH) ? 'design-guideline' : KIND_TYPES[kind ?? ''] ?? 'documentation';
 
   if (!title || !permalink || !isResultTypeSupported(type, filterType) || !isUrlSupported(permalink)) {
     return null;
