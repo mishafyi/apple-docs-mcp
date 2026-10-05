@@ -204,6 +204,68 @@ describe('fetchAppleDocJson', () => {
     });
   });
 
+  describe('articles', () => {
+    it('should render an article in full: headings, bold rules, link titles, columns, tables and code', async () => {
+      // The shape of a Human Interface Guidelines page, which opens with paragraphs and has no declaration
+      const doc = {
+        primaryContentSections: [{
+          kind: 'content',
+          content: [
+            { type: 'paragraph', inlineContent: [{ type: 'text', text: 'A tab bar lets people navigate.' }] },
+            { type: 'heading', level: 2, text: 'Best practices' },
+            {
+              type: 'paragraph',
+              inlineContent: [
+                { type: 'strong', inlineContent: [{ type: 'text', text: 'Use a tab bar to support navigation.' }] },
+                { type: 'text', text: ' For actions, use a ' },
+                { type: 'reference', identifier: 'doc://com.apple.HIG/toolbars', isActive: true, overridingTitle: 'toolbar' },
+                { type: 'text', text: ' or ' },
+                { type: 'reference', identifier: 'doc://com.apple.documentation/documentation/uikit/uitabbar', isActive: true },
+                { type: 'text', text: '.' },
+              ],
+            },
+            { type: 'heading', level: 3, text: 'iPadOS' },
+            {
+              type: 'row',
+              columns: [{ content: [{ type: 'paragraph', inlineContent: [{ type: 'text', text: 'Left column' }] }] }],
+            },
+            { type: 'codeListing', syntax: 'swift', code: ['TabView { }'] },
+            {
+              type: 'table',
+              header: 'row',
+              rows: [
+                [[{ type: 'paragraph', inlineContent: [{ type: 'text', text: 'Date' }] }],
+                  [{ type: 'paragraph', inlineContent: [{ type: 'text', text: 'Changes' }] }]],
+                [[{ type: 'paragraph', inlineContent: [{ type: 'text', text: 'June 8, 2026' }] }],
+                  [{ type: 'paragraph', inlineContent: [{ type: 'text', text: 'Updated art.' }] }]],
+              ],
+            },
+          ],
+        }],
+        references: {
+          'doc://com.apple.HIG/toolbars': { title: 'Toolbars', url: '/design/human-interface-guidelines/toolbars' },
+          'doc://com.apple.documentation/documentation/uikit/uitabbar': {
+            title: 'UITabBar', url: '/documentation/uikit/uitabbar', kind: 'symbol',
+          },
+        },
+        metadata: { role: 'article', title: 'Tab bars' },
+      };
+
+      (apiCache.get as jest.Mock).mockReturnValue(null);
+      (httpClient.getJson as jest.Mock).mockResolvedValue(doc);
+
+      const text = (await fetchAppleDocJson(mockDocUrl)).content[0].text;
+
+      expect(text).toContain('## Overview\n\nA tab bar lets people navigate.');
+      expect(text).toContain('## Best practices');
+      expect(text).toContain('**Use a tab bar to support navigation.** For actions, use a toolbar or `UITabBar`.');
+      expect(text).toContain('### iPadOS');
+      expect(text).toContain('Left column');
+      expect(text).toContain('```swift\nTabView { }\n```');
+      expect(text).toContain('| Date | Changes |\n| --- | --- |\n| June 8, 2026 | Updated art. |');
+    });
+  });
+
   describe('error handling', () => {
     it('should handle network errors', async () => {
       (apiCache.get as jest.Mock).mockReturnValue(null);

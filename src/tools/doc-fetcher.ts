@@ -2,7 +2,7 @@ import { apiCache, generateEnhancedCacheKey } from '../utils/cache.js';
 import { convertToJsonApiUrl } from '../utils/url-converter.js';
 import { httpClient } from '../utils/http-client.js';
 import type { AppleDocJSON } from '../types/apple-docs.js';
-import type { ContentSection, ContentItem } from '../types/content-sections.js';
+import type { ContentSection, ContentItem, InlineItem } from '../types/content-sections.js';
 import { logger } from '../utils/logger.js';
 import { PROCESSING_LIMITS } from '../utils/constants.js';
 import {
@@ -123,7 +123,7 @@ function formatSpecificAPIContent(jsonData: AppleDocJSON): string {
 
         case 'content':
           if (typedSection.content && Array.isArray(typedSection.content)) {
-            content += formatContentItems(typedSection.content as ContentItem[]);
+            content += formatContentItems(typedSection.content as ContentItem[], jsonData.references);
           }
           break;
       }
@@ -133,66 +133,103 @@ function formatSpecificAPIContent(jsonData: AppleDocJSON): string {
   return content;
 }
 
+type References = AppleDocJSON['references'];
+
 /**
- * Format the inline content of a paragraph
+ * Format the inline content of a paragraph, keeping strong and emphasized runs
  */
-function formatInlineContent(inlineContent: NonNullable<ContentItem['inlineContent']>): string {
+function formatInlineContent(inlineContent: InlineItem[], references: References): string {
   return inlineContent
     .map((inline) => {
-      if (inline.type === 'text') {
-        return inline.text ?? '';
-      } else if (inline.type === 'codeVoice') {
-        return `\`${inline.code ?? ''}\``;
-      } else if (inline.type === 'reference' && inline.identifier) {
-        return `\`${inline.identifier.split('/').pop() ?? inline.identifier}\``;
+      switch (inline.type) {
+        case 'text':
+          return inline.text ?? '';
+        case 'codeVoice':
+          return `\`${inline.code ?? ''}\``;
+        case 'strong':
+          return `**${formatInlineContent(inline.inlineContent ?? [], references)}**`;
+        case 'emphasis':
+          return `*${formatInlineContent(inline.inlineContent ?? [], references)}*`;
+        case 'link':
+          return inline.title ?? '';
+        case 'reference':
+          return formatReference(inline, references);
+        default:
+          return '';
       }
-      return '';
     })
     .join('');
 }
 
 /**
- * Format content blocks, including the blocks that hold other blocks: a code listing's language tabs
- * (Swift, Objective-C), notes, and lists. Blocks of any other type are left out.
+ * A reference reads as the words the page links (its overriding title), else its target's title; a symbol is code
  */
-function formatContentItems(items: ContentItem[]): string {
-  return items.map((item) => {
-    switch (item.type) {
-      case 'heading':
-        return `## ${item.text}\n\n`;
-      case 'paragraph': {
-        const text = formatInlineContent(item.inlineContent ?? []);
-        return text.trim() ? `${text}\n\n` : '';
-      }
-      case 'codeListing':
-        return item.code ? `\`\`\`${item.syntax ?? 'swift'}\n${item.code.join('\n')}\n\`\`\`\n\n` : '';
-      case 'tabNavigator':
-        return (item.tabs ?? [])
-          .map((tab) => `**${tab.title ?? ''}**\n\n${formatContentItems(tab.content ?? [])}`)
-          .join('');
-      case 'aside': {
-        const body = formatContentItems(item.content ?? []).trim().replace(/\n/g, '\n> ');
-        return `> **${item.name ?? 'Note'}:** ${body}\n\n`;
-      }
-      case 'unorderedList':
-      case 'orderedList':
-        return formatList(item);
-      default:
-        return '';
-    }
-  }).join('');
+function formatReference(inline: InlineItem, references: References): string {
+  if (!inline.identifier) {
+    return '';
+  }
+  const target = references?.[inline.identifier];
+  const title = inline.overridingTitle ?? target?.title ?? inline.identifier.split('/').pop() ?? '';
+  return target?.kind === 'symbol' ? `\`${title}\`` : title;
+}
+
+/**
+ * Each block type's formatter. Blocks of any other type are left out.
+ */
+const BLOCK_FORMATTERS: Record<string, (item: ContentItem, references: References) => string> = {
+  heading: (item) => `${'#'.repeat(Math.min(Math.max(item.level ?? 2, 2), 6))} ${item.text}\n\n`,
+  paragraph: (item, references) => {
+    const text = formatInlineContent(item.inlineContent ?? [], references);
+    return text.trim() ? `${text}\n\n` : '';
+  },
+  codeListing: (item) => item.code ? `\`\`\`${item.syntax ?? 'swift'}\n${item.code.join('\n')}\n\`\`\`\n\n` : '',
+  tabNavigator: (item, references) => (item.tabs ?? [])
+    .map((tab) => `**${tab.title ?? ''}**\n\n${formatContentItems(tab.content ?? [], references)}`)
+    .join(''),
+  aside: (item, references) => {
+    const body = formatContentItems(item.content ?? [], references).trim().replace(/\n/g, '\n> ');
+    return `> **${item.name ?? 'Note'}:** ${body}\n\n`;
+  },
+  unorderedList: (item, references) => formatList(item, references),
+  orderedList: (item, references) => formatList(item, references),
+  row: (item, references) => (item.columns ?? [])
+    .map((column) => formatContentItems(column.content ?? [], references))
+    .join(''),
+  table: (item, references) => formatTable(item, references),
+};
+
+/**
+ * Format content blocks, including the blocks that hold other blocks: a code listing's language tabs
+ * (Swift, Objective-C), notes, lists, side-by-side columns, and tables
+ */
+function formatContentItems(items: ContentItem[], references: References): string {
+  return items.map((item) => BLOCK_FORMATTERS[item.type]?.(item, references) ?? '').join('');
 }
 
 /**
  * Format a list's items, numbered for an ordered list
  */
-function formatList(item: ContentItem): string {
+function formatList(item: ContentItem, references: References): string {
   const listItems = (item.items ?? []) as Array<{ content?: ContentItem[] }>;
   const lines = listItems.map((listItem, index) => {
     const marker = item.type === 'orderedList' ? `${index + 1}.` : '-';
-    return `${marker} ${formatContentItems(listItem.content ?? []).trim().replace(/\n/g, '\n  ')}`;
+    return `${marker} ${formatContentItems(listItem.content ?? [], references).trim().replace(/\n/g, '\n  ')}`;
   });
   return `${lines.join('\n')}\n\n`;
+}
+
+/**
+ * Format a table in Markdown, each cell's blocks on one line; a table without a header row gets an empty one
+ */
+function formatTable(item: ContentItem, references: References): string {
+  const rows = (item.rows ?? []).map((row) =>
+    `| ${row.map((cell) => formatContentItems(cell, references).trim().replace(/\s*\n+\s*/g, ' ')).join(' | ')} |`);
+  const width = item.rows?.[0]?.length ?? 0;
+  if (width === 0) {
+    return '';
+  }
+  const header = item.header === 'row' || item.header === 'both' ? rows.shift() : `|${' |'.repeat(width)}`;
+  return `${header}\n|${' --- |'.repeat(width)}\n${rows.map((row) => `${row}\n`).join('')}\n`;
 }
 
 /**
@@ -201,51 +238,14 @@ function formatList(item: ContentItem): string {
 function formatAPICollectionContent(jsonData: AppleDocJSON): string {
   let content = '';
 
-  // Add primary content sections (Overview)
+  // Add primary content sections (Overview); an article that opens with its own heading keeps it
   if (jsonData.primaryContentSections && Array.isArray(jsonData.primaryContentSections)) {
-    content += '## Overview\n\n';
     jsonData.primaryContentSections.forEach((section) => {
       const typedSection = section as ContentSection;
       if (typedSection.kind === 'content' && typedSection.content) {
-        typedSection.content.forEach((item: any) => {
-          if (item.type === 'paragraph' && item.inlineContent) {
-            const paragraphText = item.inlineContent
-              .map((inline: any) => {
-                if (inline.type === 'text') {
-                  return inline.text ?? '';
-                } else if (inline.type === 'reference' && inline.identifier) {
-                  // Extract API name from identifier
-                  const apiName = inline.identifier.split('/').pop() ?? inline.identifier;
-                  return `\`${apiName}\``;
-                }
-                return '';
-              })
-              .join('');
-            if (paragraphText.trim()) {
-              content += `${paragraphText}\n\n`;
-            }
-          } else if (item.type === 'unorderedList' && item.items) {
-            item.items.forEach((listItem: any) => {
-              if (listItem.content?.[0]?.inlineContent) {
-                const listText = listItem.content[0].inlineContent
-                  .map((inline: any) => {
-                    if (inline.type === 'text') {
-                      return inline.text ?? '';
-                    } else if (inline.type === 'reference' && inline.identifier) {
-                      const apiName = inline.identifier.split('/').pop() ?? inline.identifier;
-                      return `\`${apiName}\``;
-                    }
-                    return '';
-                  })
-                  .join('');
-                if (listText.trim()) {
-                  content += `- ${listText}\n`;
-                }
-              }
-            });
-            content += '\n';
-          }
-        });
+        const items = typedSection.content as ContentItem[];
+        content += items[0]?.type === 'heading' ? '' : '## Overview\n\n';
+        content += formatContentItems(items, jsonData.references);
       }
     });
   }
