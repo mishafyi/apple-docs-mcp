@@ -134,6 +134,51 @@ describe('Response Format Validation', () => {
   };
 
   describe('searchAppleDocs response format', () => {
+    const documentationScope = {
+      kind: 'and',
+      scopes: [
+        { kind: 'hostname', value: 'developer.apple.com' },
+        { kind: 'pathPrefix', value: '/documentation/' },
+      ],
+    };
+    const sampleScope = { kind: 'documentationRole', value: 'sampleCode' };
+
+    it('includes sample-only hits in the default search, deduplicated within one 50-result budget', async () => {
+      const hit = (title: string, kind: string) => ({
+        value: { metadata: { title, kind, permalink: `https://developer.apple.com/documentation/demo/${title}` } },
+      });
+      const stream = (results: ReturnType<typeof hit>[]) => JSON.stringify({
+        kind: 'search', diff: { append: JSON.stringify({ results }) },
+      });
+      const docs = Array.from({ length: 50 }, (_, i) => hit(`doc-${i}`, 'symbol'));
+      const shared = hit('shared', 'sampleCode');
+      const { httpClient } = await import('../src/utils/http-client.js');
+      const post = jest.mocked(httpClient.postText);
+      post.mockResolvedValueOnce(stream([docs[0], shared, ...docs.slice(1)]))
+        .mockResolvedValueOnce(stream([shared, hit('sample-only', 'sampleCode')]));
+
+      const response = await server.searchAppleDocs('Landmarks');
+      expect(post.mock.calls.map(([, body]) => (body as { searchScope: unknown }).searchScope))
+        .toEqual([documentationScope, sampleScope]);
+      const text = response.content[0].text;
+      expect(text).toContain('**Results found:** 50');
+      expect(text).toContain('https://developer.apple.com/documentation/demo/doc-0');
+      expect(text).toContain('https://developer.apple.com/documentation/demo/sample-only');
+      expect(text.match(/https:\/\/developer\.apple\.com\/documentation\/demo\/shared\b/g)).toHaveLength(1);
+    });
+
+    it.each([
+      { filter: 'documentation', scope: documentationScope },
+      { filter: 'sample', scope: sampleScope },
+    ])('requests only the selected scope for $filter', async ({ filter, scope }) => {
+      const { httpClient } = await import('../src/utils/http-client.js');
+      await server.searchAppleDocs('Landmarks', filter);
+      expect(httpClient.postText).toHaveBeenCalledTimes(1);
+      expect(httpClient.postText).toHaveBeenCalledWith(
+        expect.any(String), expect.objectContaining({ searchScope: scope }), 'application/jsonl',
+      );
+    });
+
     it('should return properly formatted response for valid query', async () => {
       const response = await server.searchAppleDocs('SwiftUI', 'all');
       
