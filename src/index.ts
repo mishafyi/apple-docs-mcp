@@ -123,23 +123,26 @@ export default class AppleDeveloperDocsMCPServer {
       // The search page fills itself in the browser from this API, so its HTML holds no results
       // (https://github.com/kimsungwhee/apple-docs-mcp/issues/51). The scopes are the ones the page
       // sends for its Sample Code and Documentation filters.
-      const jsonl = await httpClient.postText(APPLE_URLS.SEARCH_API, {
+      const sampleScope = { kind: 'documentationRole', value: 'sampleCode' };
+      const documentationScope = {
+        kind: 'and',
+        scopes: [
+          { kind: 'hostname', value: 'developer.apple.com' },
+          { kind: 'pathPrefix', value: '/documentation/' },
+        ],
+      };
+      const primaryScope = type === 'sample' ? sampleScope : documentationScope;
+      const scopes = type === 'all' ? [primaryScope, sampleScope] : [primaryScope];
+      const searches = scopes.map(searchScope => httpClient.postText(APPLE_URLS.SEARCH_API, {
         text: query,
         targetResultLocale: 'en',
         includedResponses: ['search'],
-        searchScope: type === 'sample'
-          ? { kind: 'documentationRole', value: 'sampleCode' }
-          : {
-            kind: 'and',
-            scopes: [
-              { kind: 'hostname', value: 'developer.apple.com' },
-              { kind: 'pathPrefix', value: '/documentation/' },
-            ],
-          },
-      }, 'application/jsonl');
+        searchScope,
+      }, 'application/jsonl'));
+      const [jsonl, sampleJsonl] = await Promise.all(searches);
 
       // 解析并返回搜索结果，传递type参数进行过滤
-      return parseSearchResults(jsonl, query, searchUrl, type);
+      return parseSearchResults(jsonl, query, searchUrl, type, sampleJsonl);
     } catch (error) {
       if (error && typeof error === 'object' && 'type' in error) {
         return createToolErrorResponse(error as any, 'search_apple_docs');

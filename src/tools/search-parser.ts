@@ -190,30 +190,51 @@ This search covers documentation and samples, but not WWDC videos. For WWDC cont
  * Replays the JSON lines Apple's search API streams, as its search page does: each `search` event takes `removeLast`
  * characters off the results document, then appends `append`
  */
+function readSearchStream(jsonl: string, filterType: string): SearchResult[] {
+  let document = '';
+  for (const line of jsonl.split('\n')) {
+    if (!line.trim()) {
+      continue;
+    }
+    const event = JSON.parse(line) as { kind?: string; diff?: { append?: string; removeLast?: number } };
+    if (event.kind === 'search') {
+      const { append = '', removeLast = 0 } = event.diff ?? {};
+      document = document.slice(0, Math.max(0, document.length - removeLast)) + append;
+    }
+  }
+  const apiResults: ApiSearchResult[] = document ? JSON.parse(document).results : [];
+  return apiResults
+    .map(result => parseSearchResult(result, filterType))
+    .filter((result): result is SearchResult => result !== null);
+}
+
+// Apple ranks the two scopes independently. Alternate ranks so a full page of symbols leaves room for sample hits.
+function mergeByRank(documentation: SearchResult[], samples: SearchResult[]): SearchResult[] {
+  const byUrl = new Map<string, SearchResult>();
+  const ranks = Math.max(documentation.length, samples.length);
+  for (let rank = 0; rank < ranks; rank++) {
+    for (const hit of [documentation[rank], samples[rank]]) {
+      if (hit && !byUrl.has(hit.url)) {
+        byUrl.set(hit.url, hit);
+      }
+    }
+  }
+  return [...byUrl.values()];
+}
+
 export function parseSearchResults(
   jsonl: string,
   query: string,
   searchUrl: string,
   filterType: string = 'all',
+  sampleJsonl?: string,
 ): { content: Array<{ type: string; text: string }> } {
   try {
-    let document = '';
-    for (const line of jsonl.split('\n')) {
-      if (!line.trim()) {
-        continue;
-      }
-      const event = JSON.parse(line) as { kind?: string; diff?: { append?: string; removeLast?: number } };
-      if (event.kind === 'search') {
-        const { append = '', removeLast = 0 } = event.diff ?? {};
-        document = document.slice(0, Math.max(0, document.length - removeLast)) + append;
-      }
-    }
-    const apiResults: ApiSearchResult[] = document ? JSON.parse(document).results : [];
-    const results = apiResults
-      .map(result => parseSearchResult(result, filterType))
-      .filter((result): result is SearchResult => result !== null)
-      .slice(0, API_LIMITS.MAX_SEARCH_RESULTS);
-
+    const primary = readSearchStream(jsonl, filterType);
+    const ranked = sampleJsonl === undefined
+      ? primary
+      : mergeByRank(primary, readSearchStream(sampleJsonl, 'sample'));
+    const results = ranked.slice(0, API_LIMITS.MAX_SEARCH_RESULTS);
     return {
       content: [{
         type: 'text',
